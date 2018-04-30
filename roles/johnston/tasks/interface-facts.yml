@@ -1,0 +1,19 @@
+# (c) Copyright 2016 DataNexus Inc.  All Rights Reserved.
+#
+# automatically set facts based on interfaces present
+---    
+- name: setting eth0 to all interfaces
+  set_fact:
+    johnston_interface: "{{ hostvars[inventory_hostname].ansible_eth0.device }}"
+    johnston_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth0.ipv4.address }}"
+    johnston_broadcast_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth0.ipv4.broadcast }}"
+    johnston_metrics_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth0.ipv4.address }}"
+  when: hostvars[inventory_hostname].ansible_eth0 is defined
+
+- name: setting eth1 to johnston and metrics
+  set_fact:
+    johnston_interface: "{{ hostvars[inventory_hostname].ansible_eth1.device }}"
+    johnston_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth1.ipv4.address }}"
+    johnston_broadcast_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth1.ipv4.broadcast }}"
+    johnston_metrics_interface_ipv4: "{{ hostvars[inventory_hostname].ansible_eth1.ipv4.address }}"    
+  when: hostvars[inventory_hostname].ansible_eth1 is defined

@@ -1,0 +1,135 @@
+#!/usr/bin/env ansible-playbook
+# (c) 2016 DataNexus Inc.  All Rights Reserved.
+#
+# main routine for provisioning johnston
+---
+- name: JOHNSTON OVERLAY | discovering {{ cloud }} networking
+  tags:
+    - johnston
+    - vm
+  hosts: localhost
+  vars_files:
+    - vars/johnston.yml
+  gather_facts: no
+  tasks:
+    - include_vars: "{{ configuration }}"
+      when: configuration is defined
+      
+    - include_role:
+        name: aws
+        tasks_from: discover-vpc
+      when: cloud == 'aws'
+    
+    - include_role:
+        name: azure
+        tasks_from: discover-resourcegroup
+      when: cloud == 'azure'
+
+- name: JOHNSTON OVERLAY | creating {{ cloud }} security groups
+  tags:
+    - johnston
+    - vm
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - include_vars: "{{ configuration }}"
+      when: configuration is defined
+      
+    - include_role:
+        name: aws
+        tasks_from: create-securitygroup
+      when: cloud == 'aws'
+
+- name: JOHNSTON OVERLAY | launching VM
+  tags: vm
+  vars_files:
+    - vars/johnston.yml
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  tasks:
+    - include_vars: "{{ configuration }}"
+      when: configuration is defined
+
+    - include_role:
+        name: aws
+        tasks_from: launch-vm
+      when: cloud == 'aws'
+    - include_role:
+        name: osp
+        tasks_from: launch-vm
+      when: cloud == 'osp'
+    - include_role:
+        name: azure
+        tasks_from: launch-vm
+      when: cloud == 'azure'
+
+- name: POSTGRESQL OVERLAY | applying {{ cloud }} security groups
+  tags:
+    - johnston
+  hosts: localhost
+  vars_files:
+    - vars/johnston.yml
+  gather_facts: no
+  tasks:
+    - include_vars: "{{ configuration }}"
+      when: configuration is defined
+      
+    - include_role:
+        name: aws
+        tasks_from: apply-securitygroup
+      when: cloud == 'aws'
+    
+    # azure security groups are applied on instance boot
+
+- name: JOHNSTON OVERLAY | gathering {{ cloud }} inventory
+  tags:
+    - johnston
+    - vm
+  hosts: localhost
+  vars_files:
+    - vars/johnston.yml
+  gather_facts: no
+  tasks:
+    - include_vars: "{{ configuration }}"
+      when: configuration is defined
+      
+    - include_role:
+        name: aws
+        tasks_from: discover-vm
+      when: cloud == 'aws'
+      
+    - include_role:
+        name: azure
+        tasks_from: discover-vm
+      when: cloud == 'azure'
+      
+# this is a separate step because ansible needs to gather facts on a fully configured base system
+- name: JOHNSTON OVERLAY | completing OS configuration
+  tags: vm
+  hosts: "{{ application }}"
+  vars_files:
+    - "{{ configuration }}"
+    - vars/johnston.yml
+  gather_facts: yes
+  tasks:
+    - include_role:
+        name: preflight
+    - include_role:
+        name: http-proxy
+      when: http_proxy is defined
+
+- name: JOHNSTON OVERLAY | installing base postgresql application
+  tags:
+    - vm
+    - "{{ application }}"
+  hosts: "{{ application }}"
+  vars_files:
+    - vars/johnston.yml
+  gather_facts: yes
+  tasks:
+    - include_vars: "{{ configuration }}"
+      when: configuration is defined
+    
+    - include_role:
+        name: johnston

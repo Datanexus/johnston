@@ -1,0 +1,217 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved.
+#
+# Launch an AWS AMI
+---
+- name: JOHNSON AWS AWS | retrieving default VPC ID
+  local_action:
+    module: ec2_vpc_net_facts
+    region: "{{ region }}"
+    filters:
+      cidr_block: "{{ cidr_block }}"
+  register: specified_vpc
+
+- name: JOHNSON AWS AWS | retrieving {{ internal_subnet }} ID for {{ cidr_block }} in {{ cloud }} {{ region }}
+  local_action:
+    module: ec2_vpc_subnet_facts
+    region: "{{ region }}"
+    filters:
+      cidr_block: "{{ internal_subnet }}"
+  register: internal_subnet_result
+  when:
+    - internal_subnet is defined
+
+- name: JOHNSON AWS AWS | retrieving {{ external_subnet }} ID for {{ cidr_block }} in {{ cloud }} {{ region }}
+  local_action:
+    module: ec2_vpc_subnet_facts
+    region: "{{ region }}"
+    filters:
+      cidr_block: "{{ external_subnet }}"
+  register: external_subnet_result
+  when:
+    - external_subnet is defined
+
+- set_fact:
+    internal_subnet_id: "{{ internal_subnet_result.subnets.0.id }}"
+  when:
+    - internal_subnet_result.skipped is not defined
+
+- set_fact:
+    external_subnet_id: "{{ external_subnet_result.subnets.0.id }}"
+  when:
+    - external_subnet_result.skipped is not defined
+
+- block:    
+  - name: JOHNSON AWS AWS | searching for CentOS 7 AMI for specified region
+    ec2_ami_find:
+      name: "CentOS Linux 7 x86_64*"
+      region: "{{ region }}"
+      owner: 679593333241
+      virtualization_type: hvm
+      sort: name
+      sort_order: descending
+      sort_end: 1
+    register: amis_found
+
+  - set_fact:
+      image: "{{ amis_found.results[0].ami_id }}"
+  when:
+    - image is not defined
+
+- name: JOHNSON AWS AWS | creating open security group
+  local_action:
+    module: ec2_group
+    name: "{{ application }}_open"
+    description: "unrestricted ingress and egress rules (ansible)"
+    vpc_id: "{{ specified_vpc.vpcs.0.id }}"
+    region: "{{ region }}"
+    rules:
+      - proto: all
+        cidr_ip: "{{ internal_subnet }}"
+    rules_egress:
+      # Allow all outbound
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  register: sg_open
+  
+- name: JOHNSON AWS AWS | creating ssh security group
+  local_action:
+    module: ec2_group
+    name: "{{ application }}_ssh"
+    description: "ssh ingress and unrestricted egress rules (ansible)"
+    vpc_id: "{{ specified_vpc.vpcs.0.id }}"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        from_port: 22
+        to_port: 22
+        cidr_ip: 0.0.0.0/0
+    rules_egress:
+      # Allow all outbound
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  register: sg_ssh
+
+- name: JOHNSON AWS | checking {{ cloud }}-{{ region }}-{{ project }}-{{ application }}-private-key.pem
+  stat: path="./{{ cloud }}-{{ region }}-{{ project }}-{{ application }}-private-key.pem"
+  register: existing_key
+
+- block: 
+  - name: JOHNSON AWS | generating public key from {{ cloud }}-{{ region }}-{{ project }}-{{ application }}-private-key.pem
+    command: "/usr/bin/ssh-keygen -f {{ cloud }}-{{ region }}-{{ project }}-{{ application }}-private-key.pem -y"
+    register: public_key_from_pem
+    
+  - name: JOHNSON AWS | using existing {{ cloud }}-{{ region }}-{{ project }}-{{ application }}
+    ec2_key:
+      region: "{{ region }}"
+      state: present
+      name: "{{ region }}-{{ project }}-{{ application }}"
+      key_material: "{{ public_key_from_pem.stdout }}" 
+    register: old_keypair
+
+  - set_fact: keypair="{{ old_keypair }}"
+  when: 
+    - existing_key.stat.exists
+
+- block:
+  - name: JOHNSON AWS | creating {{ cloud }}-{{ region}}-{{ project }}-{{ application }}
+    ec2_key:
+      name: "{{ region }}-{{ project }}-{{ application }}"
+      region: "{{ region }}"
+    register: new_keypair
+    
+  - set_fact: keypair="{{ new_keypair }}"
+
+  - name: JOHNSON AWS | saving {{ cloud }}-{{ region }}-{{ project }}-{{ application }}
+    copy:
+      dest: "./{{ cloud }}-{{ keypair.key.name }}-private-key.pem"
+      content: "{{ keypair.key.private_key }}"
+      mode: 0400
+  when:
+    - not existing_key.stat.exists
+
+- name: JOHNSON AWS | setting count to single node unless otherwise specified
+  set_fact:
+    count: 1 
+  when: count is not defined
+
+- name: JOHNSON AWS AWS | launching AMI
+  ec2:
+    key_name: "{{ keypair.key.name }}"
+    group_id: "{{ sg_ssh.group_id }}"
+    instance_type: "{{ type }}"
+    image: "{{ image }}"
+    vpc_subnet_id: "{{ external_subnet_id }}"
+    region: "{{ region }}"
+    assign_public_ip: yes
+    wait: true
+    exact_count: "{{ count }}"
+    count_tag:
+      Name: "{{ project }}_{{ application }}"
+      Tenant: "{{ tenant }}"
+      Project: "{{ project }}"
+      Cloud: "{{ cloud }}"
+      Domain: "{{ domain }}"
+      Application: "{{ application }}"
+      Cluster: "{{ cluster | default ('a') }}"
+      Role: "{{ role | default ('none') }}"
+      Dataflow: "{{ dataflow | default ('none') }}"
+    instance_tags:
+      Name: "{{ project }}_{{ application }}"
+      Tenant: "{{ tenant }}"
+      Project: "{{ project }}"
+      Cloud: "{{ cloud }}"
+      Domain: "{{ domain }}"
+      Application: "{{ application }}"
+      Cluster: "{{ cluster | default ('a') }}"
+      Role: "{{ role | default ('none') }}"
+      Dataflow: "{{ dataflow | default ('none') }}"
+    ebs_optimized: false
+    volumes:
+      - device_name: /dev/sda1
+        volume_type: gp2
+        volume_size: "{{ root_volume }}"
+        delete_on_termination: true
+  register: ec2
+    
+- name: JOHNSON AWS AWS | creating private internal ENI as eth1 
+  ec2_eni:
+    description: "private internal"
+    instance_id: "{{ item.id }}"
+    region: "{{ region }}"
+    subnet_id: "{{ internal_subnet_id }}"
+    device_index: 1
+    attached: true
+    security_groups: "{{ sg_open.group_id }}"
+    state: present
+  register: private_eni
+  with_items: "{{ ec2.instances }}"
+  when:
+    - not ec2|skipped and ec2.changed and ec2.instances|length > 0
+    - internal_subnet_id is defined
+
+- name: JOHNSON AWS AWS | configuring private internal ENI to delete on termination
+  ec2_eni:
+    region: "{{ region }}"
+    eni_id: "{{ item.interface.id }}"
+    subnet_id: "{{ internal_subnet_id }}"
+    delete_on_termination: true
+  with_items: "{{ private_eni.results }}"
+  when:
+    - not private_eni | skipped and private_eni.changed and private_eni.results | length > 0
+    
+- name: JOHNSON AWS AWS | building {{ application }} host group
+  add_host: hostname="{{ item.public_ip }}" groups=jumphost ansible_ssh_private_key_file="{{ ansible_env.PWD }}/{{ keypair.key.name }}-private-key.pem" ansible_ssh_user="{{ user }}"
+  with_items: "{{ ec2.instances }}"
+  when:
+    - not ec2 | skipped and ec2.changed and ec2.instances | length > 0
+
+# wait_for doesn't work with a proxy, so we need to ssh and check output
+- name: JOHNSON AWS AWS | waiting for {{ item }} with {{ keypair.key.name }}-private-key.pem"
+  local_action: shell /bin/sleep 60 && /usr/bin/ssh -i "./{{ keypair.key.name }}-private-key.pem" "{{ user }}"@"{{ item }}" echo DataNexus
+  register: output
+  retries: 4
+  delay: 15
+  until: output.stdout.find('DataNexus') != -1
+  with_items: "{{ groups.jumphost }}"
+  when:
+    - not ec2|skipped and ec2.changed and ec2.instances|length > 0
