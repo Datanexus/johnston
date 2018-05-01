@@ -1,0 +1,27 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved.
+#
+# discover Azure inventory
+---
+- name: JOHNSTON OVERLAY | setting key_path
+  set_fact: key_path="{{ ansible_env.PWD }}"
+  when: key_path is not defined
+
+- name: JOHNSTON OVERLAY | discovering {{ application }}
+  azure_rm_networkinterface_facts:
+    resource_group: "{{ specified_resourcegroup.name }}"
+    name: "{{ project }}_{{ application }}_internal"
+    tags:
+      - Application:{{ application }}
+      - Role:{{ role | default('none') }}
+      - Tenant:{{ tenant }}
+      - Project:{{ project }}
+      - Cloud:{{ cloud }}
+      - Domain:{{ domain }}
+      - Cluster:{{ cluster | default('none') }}
+      - Dataflow:{{ dataflow | default('none') }}
+  register: johnston_node
+
+- name: JOHNSTON OVERLAY | adding all johnston nodes to {{ application }} host group
+  add_host: hostname="{{ item.properties.ipConfigurations.0.properties.privateIPAddress }}" groupname={{ application }} ansible_user="{{ user }}" ansible_ssh_private_key_file="{{ key_path }}/{{ cloud }}-{{ region }}-{{ project }}-{{ application }}-{{ domain }}-private-key.pem"
+  with_items: "{{ johnston_node.ansible_facts.azure_networkinterfaces }}"
+ 

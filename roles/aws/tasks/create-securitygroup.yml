@@ -1,0 +1,21 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved.
+#
+# create AWS johnston security group rules
+---
+- name: JOHNSTON OVERLAY | creating pgadmin security group
+  local_action:
+    module: ec2_group
+    name: "dnsg_{{ project }}_johnston_private_internal"
+    description: "pgadmin ingress and unrestricted egress rules (ansible)"
+    vpc_id: "{{ specified_vpc.vpcs.0.id }}"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        from_port: 5050
+        to_port: 5050
+        cidr_ip: "{{ internal_subnet }}"
+    rules_egress:
+      # Allow all outbound
+      - proto: all
+        cidr_ip: 0.0.0.0/0
+  register: sg_johnston
