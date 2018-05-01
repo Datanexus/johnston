@@ -18,10 +18,12 @@
 }}-{{ postgresql_major_version }}-2.noarch.rpm'
     - epel-release
 
-# - name: JOHNSTON OVERLAY | installing postgresql management packages...this may take some time
-#   become: true
-#   package:
-#     name: "{{ item }}"
-#     state: present
-#   with_items:
-#     - pgadmin4-3.0-4.rhel7
+- name: JOHNSTON OVERLAY | installing postgresql management packages...this may take some time
+  become: true
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - pgadmin4-3.0-5.rhel7
+    
+- debug: msg="run sudo /usr/pgadmin4/bin/pgadmin4-web-setup.sh"
