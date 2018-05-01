@@ -1,0 +1,32 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved.
+#
+# Apply AWS johnston security group rules
+---
+- name: JOHNSTON OVERLAY | disocvering {{ application }} instances
+  ec2_instance_facts:
+    region: "{{ region }}"
+    filters:
+      instance-state-name: running
+      "tag:Tenant": "{{ tenant }}"
+      "tag:Project": "{{ project }}"
+      "tag:Domain": "{{ domain }}"
+      "tag:Application": "{{ application }}"
+      "tag:Cluster": "{{ cluster | default ('none') }}"
+      "tag:Dataflow": "{{ dataflow | default ('none') }}"
+  register: all_johnston_nodes
+  when: cloud == 'aws'
+
+# construct list of all interfaces attached to johnston nodes
+- set_fact:
+    johnston_interfaces: "{{ all_johnston_nodes.instances | map(attribute='network_interfaces') | list }}"
+  when: all_johnston_nodes.instances | length > 0
+  
+# apply johnston rule
+- name: JOHNSTON OVERLAY | applying {{ application }} security rules to interface 0
+  ec2_eni:
+    region: "{{ region }}"
+    eni_id: "{{ item.network_interface_id }}"
+    security_groups:
+      - "{{ sg_johnston.group_id }}"
+  with_items: "{{ johnston_interfaces }}"
+  when: item.attachment.device_index == 0

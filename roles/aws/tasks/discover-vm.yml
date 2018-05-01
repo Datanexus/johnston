@@ -1,0 +1,29 @@
+# (c) 2016 DataNexus Inc.  All Rights Reserved.
+#
+# discover AWS inventory
+---
+- name: JOHNSTON OVERLAY | setting key_path
+  set_fact: key_path="{{ ansible_env.PWD }}"
+  when: key_path is not defined
+
+- name: JOHNSTON OVERLAY | discovering {{ application }}
+  ec2_instance_facts:
+    region: "{{ region }}"
+    filters:
+      instance-state-name: running
+      "tag:Tenant": "{{ tenant }}"
+      "tag:Project": "{{ project }}"
+      "tag:Domain": "{{ domain }}"
+      "tag:Application": "{{ application }}"
+      "tag:Cluster": "{{ cluster | default ('none') }}"
+      "tag:Dataflow": "{{ dataflow | default ('none') }}"
+  register: johnston_instances
+  when: cloud == 'aws'
+
+- name: JOHNSTON OVERLAY | building johnston host group
+  add_host: hostname="{{ item }}" groupname="{{ application }}" ansible_user="{{ user }}" ansible_ssh_private_key_file="{{ key_path }}/{{cloud }}-{{ region }}-{{ project }}-{{ application }}-{{ domain }}-private-key.pem"
+  with_items: "{{ johnston_instances.instances | map (attribute='private_ip_address') | list }}"
+  when:
+    - cloud == 'aws'
+    - johnston_instances is defined
+    - johnston_instances.instances|length > 0
