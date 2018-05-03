@@ -50,7 +50,7 @@
         proto: '*'
         source_address_prefix: '*'
         source_port_range: '*'
-        destination_address_prefix: "{{ internal_private_subnet_result.properties.addressPrefix }}"
+        destination_address_prefix: '*'
         destination_port_range: '*'
         access: Deny
         priority: 200
@@ -110,7 +110,7 @@
     name: "{{ project }}_{{ application }}_internal"    
     virtual_network: "{{ virtualnetwork_by_name.ansible_facts.azure_virtualnetworks.0.name }}"
     subnet_name: "{{ internal_private_subnet_result.name }}"
-    security_group: "dnsg_{{ project }}_ssh_private_internal"
+    security_group_name: "dnsg_{{ project }}_ssh_private_internal"
     ip_configurations:
       - name: ipconfig1
         primary: yes
@@ -130,7 +130,7 @@
     name: "{{ project }}_{{ application }}_external"
     virtual_network: "{{ virtualnetwork_by_name.ansible_facts.azure_virtualnetworks.0.name }}"
     subnet_name: '{{ internal_public_subnet_result.name }}'
-    security_group: "dnsg_{{ project }}_closed"
+    security_group_name: "dnsg_{{ project }}_closed"
     ip_configurations:
       - name: ipconfig1
         primary: yes
