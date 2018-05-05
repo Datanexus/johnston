@@ -146,7 +146,7 @@
         
 # this is not necessarily idempotent because we're shelling out
 - name: JOHNSTON AZURE | creating {{ application }} VM in {{ specified_resourcegroup.name }}
-  command: "az vm create --resource-group {{ specified_resourcegroup.name }} --name {{ project }}-{{ application }} --location {{ region }} --nics {{ project }}_{{ application }}_internal {{ project }}_{{ application }}_external --size {{ image | default('Standard_A0') }} --image Centos --admin-username {{ user }} --authentication-type ssh --ssh-key-value {{ key_path }}/{{ cloud }}-{{ region }}-{{ project }}-{{ application }}-{{ domain }}-private-key.pem.pub --tags Name={{ project }}_{{ application }} Tenant={{ tenant }} Project={{ project }} Cloud={{ cloud }} Domain={{ domain }} Application={{ application }} Cluster={{ cluster | default ('none') }} Role={{ role | default ('none') }} Dataflow={{ dataflow | default ('none') }}"
+  command: "az vm create --resource-group {{ specified_resourcegroup.name }} --name {{ project }}-{{ application }} --location {{ region }} --nics {{ project }}_{{ application }}_internal {{ project }}_{{ application }}_external --size {{ type | default('Standard_A0') }} --image {{ image | default('Centos') }} --admin-username {{ user }} --authentication-type ssh --ssh-key-value {{ key_path }}/{{ cloud }}-{{ region }}-{{ project }}-{{ application }}-{{ domain }}-private-key.pem.pub --tags Name={{ project }}_{{ application }} Tenant={{ tenant }} Project={{ project }} Cloud={{ cloud }} Domain={{ domain }} Application={{ application }} Cluster={{ cluster | default ('none') }} Role={{ role | default ('none') }} Dataflow={{ dataflow | default ('none') }}"
 
 - name: JOHNSTON AZURE | discovering {{ application }}
   azure_rm_publicipaddress_facts:
