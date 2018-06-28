@@ -14,8 +14,8 @@
     name: "{{ item }}"
     state: present
   with_items:
-    - 'https://download.postgresql.org/pub/repos/yum/{{ postgresql_major_version }}/redhat/rhel-7-x86_64/pgdg-{{ ansible_distribution|lower }}{{ postgresql_major_version
-}}-{{ postgresql_major_version }}-2.noarch.rpm'
+    - "https://download.postgresql.org/pub/repos/yum/{{ postgresql_major_version }}/redhat/rhel-7-x86_64/pgdg-{{ ansible_distribution|lower }}{{ postgresql_major_version
+}}-{{ postgresql_major_version }}-2.noarch.rpm"
     - epel-release
 
 - name: JOHNSTON OVERLAY | installing postgresql management packages...this may take some time
@@ -24,6 +24,6 @@
     name: "{{ item }}"
     state: present
   with_items:
-    - pgadmin4-3.0-5.rhel7
+    - "pgadmin4-{{ pgadmin_version }}"
     
 - debug: msg="run sudo /usr/pgadmin4/bin/pgadmin4-web-setup.sh"
